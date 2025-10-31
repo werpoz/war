@@ -1,0 +1,9 @@
+### Crear sesión Baileys (storage: file)
+POST http://localhost:3000/sessions/start
+Content-Type: application/json
+
+{
+  "sessionId": "session01",
+  "provider": "baileys",
+  "storage": "file"
+}
