@@ -1,9 +1,15 @@
 // infrastructure/providers/baileys/session.socket.listener.ts
 import { Injectable, Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import type { BaileysEventMap } from '@whiskeysockets/baileys';
-import { BaileysSessionProvider } from './baileys-session.provider';
-import type { SessionBaileys } from './baileys-session.provider';
+import {
+  DisconnectReason,
+  type BaileysEventMap,
+} from '@whiskeysockets/baileys';
+import {
+  BaileysSessionProvider,
+  type SessionBaileys,
+  type SessionEventHandlers,
+} from './baileys-session.provider';
 
 @Injectable()
 export class SessionSocketListener {
@@ -91,26 +97,19 @@ export class SessionSocketListener {
   private bindSessionEvents(sessionId: string, session: SessionBaileys) {
     if (this.boundSessions.has(sessionId)) return;
 
-    const { socket, saveCreds } = session;
-
-    const credsHandler = () => {
-      void saveCreds();
+    const handlers: SessionEventHandlers = {
+      creds: () => {
+        void session.saveCreds();
+      },
+      messages: (msg: BaileysEventMap['messages.upsert']) => {
+        this.events.emit('session.message', { sessionId, msg });
+      },
+      connection: (update: BaileysEventMap['connection.update']) => {
+        void this.handleConnectionUpdate(sessionId, session, update);
+      },
     };
 
-    const messagesHandler = (msg: BaileysEventMap['messages.upsert']) => {
-      this.events.emit('session.message', { sessionId, msg });
-    };
-
-    const connectionHandler = (
-      update: BaileysEventMap['connection.update'],
-    ) => {
-      void this.handleConnectionUpdate(sessionId, session, update);
-    };
-
-    socket.ev.on('creds.update', credsHandler);
-    socket.ev.on('messages.upsert', messagesHandler);
-    socket.ev.on('connection.update', connectionHandler);
-
+    this.provider.attachHandlers(sessionId, handlers);
     this.boundSessions.add(sessionId);
   }
 
@@ -154,9 +153,81 @@ export class SessionSocketListener {
 
     if (connection === 'close') {
       this.pendingPairing.delete(sessionId);
+      const statusCode = this.extractDisconnectCode(update);
+
+      if (statusCode === DisconnectReason.loggedOut || statusCode === 401) {
+        await this.provider.logout(sessionId);
+        this.events.emit('session.removed', { sessionId });
+        this.boundSessions.delete(sessionId);
+        return;
+      }
+
+      if (statusCode === DisconnectReason.restartRequired) {
+        this.logger.log(`Restart required; recreating socket for ${sessionId}`);
+        const restarted = await this.provider.restart(sessionId);
+        if (restarted) {
+          this.boundSessions.delete(sessionId);
+          this.bindSessionEvents(sessionId, restarted);
+          this.events.emit('session.status', {
+            sessionId,
+            status: 'connecting',
+          });
+          return;
+        }
+        this.logger.warn(
+          `Restart required but session ${sessionId} could not be recreated`,
+        );
+      }
+
       await this.provider.disconnect(sessionId);
       this.events.emit('session.closed', { sessionId });
       this.boundSessions.delete(sessionId);
     }
+  }
+
+  private extractDisconnectCode(
+    update: BaileysEventMap['connection.update'],
+  ): number | undefined {
+    const error = update.lastDisconnect?.error as
+      | {
+          output?: {
+            statusCode?: number | string;
+            payload?: Record<string, unknown>;
+          };
+        }
+      | { statusCode?: number | string; data?: Record<string, unknown> }
+      | undefined;
+    if (!error) return undefined;
+
+    const output = 'output' in error ? error.output : undefined;
+    const payload = output?.payload as
+      | { statusCode?: number | string; status?: number | string }
+      | undefined;
+    const data = (error as { data?: Record<string, unknown> }).data as
+      | {
+          statusCode?: number | string;
+          status?: number | string;
+          code?: number | string;
+        }
+      | undefined;
+
+    const candidates = [
+      output?.statusCode,
+      payload?.statusCode,
+      payload?.status,
+      data?.statusCode,
+      data?.status,
+      data?.code,
+      (error as { statusCode?: number | string }).statusCode,
+    ];
+
+    for (const code of candidates) {
+      if (typeof code === 'number') return code;
+      if (typeof code === 'string' && code.trim() !== '') {
+        const parsed = Number(code);
+        if (!Number.isNaN(parsed)) return parsed;
+      }
+    }
+    return undefined;
   }
 }

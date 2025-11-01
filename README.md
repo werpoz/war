@@ -65,8 +65,8 @@ Events emitted through `EventEmitter2`:
    - Handles connection updates:
      - Emits status/QR events
      - Requests pairing code when the user supplies a phone number
-     - On `restartRequired (515)` automatically recreates the socket
-     - On device removal (`401`) calls `logout` and emits `session.removed`
+    - On `restartRequired (515)` automatically recreates the socket
+    - On device removal (`401`) calls `logout`, wipes persisted credentials, and emits `session.removed`
 
 ### Logging
 
@@ -87,7 +87,7 @@ Baileys credentials are persisted under `./storage/sessions/<sessionId>`. Ensure
 ### Troubleshooting
 
 - **`restart required (515)`**: The listener auto-restarts the socket. Check logs for `Restart required; recreating socket`.
-- **Device removed / 401**: The session is logged out and `session.removed` is emitted; you must initiate a fresh pairing.
+- **Device removed / 401**: The session is logged out, credentials are purged from `./storage`, and `session.removed` is emitted; you must initiate a fresh pairing.
 - **Max listeners warning**: The listener guards against duplicate bindings; if you still see warnings, verify that `listen()` is not called repeatedly for the same session without awaiting completion.
 - **Auth folder permissions**: Make sure the process can read/write `./storage`.
 

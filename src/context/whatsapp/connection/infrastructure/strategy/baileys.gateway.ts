@@ -15,12 +15,12 @@ export class BaileysGateway implements WhatsappGateway {
     opts?: { phone?: string; storage?: string },
   ): Promise<string | undefined> {
     const storage = opts?.storage ?? 'file';
-    const { state, saveCreds } = await this.storageFactory.create(
+    const { state, saveCreds, clear } = await this.storageFactory.create(
       'baileys',
       storage,
       sessionId,
     );
-    await this.provider.createWithAuth(sessionId, state, saveCreds);
+    await this.provider.createWithAuth(sessionId, state, saveCreds, clear);
     return this.listener.listen(sessionId, opts?.phone);
   }
 
