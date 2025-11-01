@@ -42,6 +42,8 @@ pnpm exec tsc --noEmit --incremental false
 
 REST endpoints (see `api.http` for samples):
 
+- `GET /sessions/:id`
+  Returns the current `SessionSnapshot` (status, provider, storage, timestamps).
 - `PUT /sessions/:id`
 
   ```json

@@ -10,6 +10,7 @@ import { WhatsappStrategyFactory } from './infrastructure/factory/wa-strategy.fa
 import { StartSessionUseCase } from './application/use-case/start-session.uc';
 import { CloseSessionUseCase } from './application/use-case/close-session.uc';
 import { RemoveSessionUseCase } from './application/use-case/remove-session.uc';
+import { GetSessionUseCase } from './application/use-case/get-session.uc';
 import { SessionInMemoryRepository } from './infrastructure/persistence/session-in-memory.repository';
 import { SessionRepository } from './domain/repository/session.repository';
 
@@ -74,7 +75,17 @@ import { SessionRepository } from './domain/repository/session.repository';
       ) => new RemoveSessionUseCase(repo, waFactory),
       inject: ['SESSION_REPOSITORY', WhatsappStrategyFactory],
     },
+    {
+      provide: GetSessionUseCase,
+      useFactory: (repo: SessionRepository) => new GetSessionUseCase(repo),
+      inject: ['SESSION_REPOSITORY'],
+    },
   ],
-  exports: [StartSessionUseCase, CloseSessionUseCase, RemoveSessionUseCase],
+  exports: [
+    StartSessionUseCase,
+    CloseSessionUseCase,
+    RemoveSessionUseCase,
+    GetSessionUseCase,
+  ],
 })
 export class WAConnectionModule {}

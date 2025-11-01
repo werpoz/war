@@ -15,3 +15,6 @@ DELETE http://localhost:3000/sessions/session01
 
 ### Remover completamente la sesión (incluye el borrado de credenciales)
 DELETE http://localhost:3000/sessions/session01/storage
+
+### Obtener el estado actual de una sesión
+GET http://localhost:3000/sessions/session01
