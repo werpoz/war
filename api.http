@@ -1,9 +1,17 @@
-### Crear sesión Baileys (storage: file)
-POST http://localhost:3000/sessions/start
+### Crear o asegurar sesión Baileys (storage: file)
+PUT http://localhost:3000/sessions/session01
 Content-Type: application/json
 
 {
-  "sessionId": "session01",
   "provider": "baileys",
   "storage": "file"
 }
+
+### Crear sesión con valores por defecto (sin cuerpo)
+PUT http://localhost:3000/sessions/session02
+
+### Cerrar sesión (mantiene credenciales en disco)
+DELETE http://localhost:3000/sessions/session01
+
+### Remover completamente la sesión (incluye el borrado de credenciales)
+DELETE http://localhost:3000/sessions/session01/storage

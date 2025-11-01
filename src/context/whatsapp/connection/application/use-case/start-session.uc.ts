@@ -1,4 +1,7 @@
-import { SessionRepository } from '../../domain/repository/session.repository';
+import {
+  SessionRepository,
+  type SessionStatus,
+} from '../../domain/repository/session.repository';
 import { WhatsappStrategyFactory } from '../../infrastructure/factory/wa-strategy.factory';
 
 export class StartSessionUseCase {
@@ -9,20 +12,35 @@ export class StartSessionUseCase {
 
   async execute(input: {
     sessionId: string;
-    provider: string;
-    storage: string;
+    provider?: string;
+    storage?: string;
     phone?: string;
-  }): Promise<{ qr?: string }> {
-    const gateway = this.waFactory.get(input.provider); // ← elige Strategy
+  }): Promise<{ status: SessionStatus; qr?: string }> {
+    const provider = input.provider ?? 'baileys';
+    const storage = input.storage ?? 'file';
+    const existing = await this.repo.findById(input.sessionId);
+
+    if (existing) {
+      if (existing.provider !== provider || existing.storage !== storage) {
+        throw new Error('Session already exists with different configuration');
+      }
+      if (existing.status !== 'closed' && existing.status !== 'removed') {
+        return { status: existing.status };
+      }
+    }
+
+    const gateway = this.waFactory.get(provider);
     const qr = await gateway.startSession(input.sessionId, {
       phone: input.phone,
-      storage: input.storage,
+      storage,
     });
 
     await this.repo.save({
       id: input.sessionId,
-      provider: input.provider,
+      provider,
+      storage,
+      status: 'starting',
     });
-    return { qr };
+    return { qr, status: 'starting' };
   }
 }

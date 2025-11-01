@@ -42,15 +42,17 @@ pnpm exec tsc --noEmit --incremental false
 
 REST endpoints (see `api.http` for samples):
 
-- `POST /sessions`
+- `PUT /sessions/:id`
 
   ```json
-  { "sessionId": "session01", "phone": "519..." }
+  { "provider": "baileys", "phone": "519..." }
   ```
 
-  Boots a socket, persists auth credentials, and returns a QR/pairing code when available.
+  Boots or ensures a socket, persists auth credentials, and returns a QR/pairing code when available (`status: "starting"`). The body is optional; defaults are `provider="baileys"` and `storage="file"` when omitted.
 - `DELETE /sessions/:id`
-  Closes the session, detaches listeners, and clears in-memory state.
+  Closes the session, detaches listeners, and keeps credentials available for a future reconnect (`status: "closed"`).
+- `DELETE /sessions/:id/storage`
+  Logs out the device, purges persisted credentials, and marks the session as removed (`status: "removed"`).
 
 Real-time events (via `EventEmitter2`; expose through WebSocket/SSE as needed):
 
@@ -76,12 +78,20 @@ Real-time events (via `EventEmitter2`; expose through WebSocket/SSE as needed):
      - On `restartRequired (515)` automatically recreates the socket
      - On device removal (`401`) logs out, wipes persisted credentials, and emits `session.removed`
 
+Session states tracked in the repository:
+
+- `starting` – command issued and awaiting connection
+- `ready` – Baileys reported the socket as open
+- `closed` – session closed but credentials retained
+- `removed` – device logged out and credentials deleted
+
 ### Logging
 
 - All Baileys logs route through Nest's `Logger` via `BaileysLoggerAdapter`.
 - Enable verbose logging with `BAILEYS_DEBUG=true`.
 - Switch to structured JSON with `LOG_FORMAT=json`.
 - Example:
+
   ```text
   [BaileysSessionProvider] LOG: connection open | meta={ sessionId: 'session01' }
   ```
@@ -91,6 +101,8 @@ Real-time events (via `EventEmitter2`; expose through WebSocket/SSE as needed):
 - Credentials persist under `./storage/sessions/<sessionId>`.
 - On logout/device removal the directory is deleted (via `FileAuthAdapter.clear`).
 - Ensure the directory (and parent) is writable.
+
+### Troubleshooting
 
 - **`restart required (515)`**: The listener auto-restarts the socket. Check logs for `Restart required; recreating socket`.
 - **Device removed / 401**: The session is logged out, credentials are purged from `./storage`, and `session.removed` is emitted; you must initiate a fresh pairing.

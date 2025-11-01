@@ -8,6 +8,8 @@ import { SessionSocketListener } from './infrastructure/providers/baileys/sessio
 import { BaileysGateway } from './infrastructure/strategy/baileys.gateway';
 import { WhatsappStrategyFactory } from './infrastructure/factory/wa-strategy.factory';
 import { StartSessionUseCase } from './application/use-case/start-session.uc';
+import { CloseSessionUseCase } from './application/use-case/close-session.uc';
+import { RemoveSessionUseCase } from './application/use-case/remove-session.uc';
 import { SessionInMemoryRepository } from './infrastructure/persistence/session-in-memory.repository';
 import { SessionRepository } from './domain/repository/session.repository';
 
@@ -56,7 +58,23 @@ import { SessionRepository } from './domain/repository/session.repository';
       ) => new StartSessionUseCase(repo, waFactory),
       inject: ['SESSION_REPOSITORY', WhatsappStrategyFactory],
     },
+    {
+      provide: CloseSessionUseCase,
+      useFactory: (
+        repo: SessionRepository,
+        waFactory: WhatsappStrategyFactory,
+      ) => new CloseSessionUseCase(repo, waFactory),
+      inject: ['SESSION_REPOSITORY', WhatsappStrategyFactory],
+    },
+    {
+      provide: RemoveSessionUseCase,
+      useFactory: (
+        repo: SessionRepository,
+        waFactory: WhatsappStrategyFactory,
+      ) => new RemoveSessionUseCase(repo, waFactory),
+      inject: ['SESSION_REPOSITORY', WhatsappStrategyFactory],
+    },
   ],
-  exports: [StartSessionUseCase],
+  exports: [StartSessionUseCase, CloseSessionUseCase, RemoveSessionUseCase],
 })
 export class WAConnectionModule {}

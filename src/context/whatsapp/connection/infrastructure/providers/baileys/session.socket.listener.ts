@@ -1,5 +1,5 @@
 // infrastructure/providers/baileys/session.socket.listener.ts
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import {
   DisconnectReason,
@@ -10,6 +10,7 @@ import {
   type SessionBaileys,
   type SessionEventHandlers,
 } from './baileys-session.provider';
+import { SessionRepository } from '../../../domain/repository/session.repository';
 
 @Injectable()
 export class SessionSocketListener {
@@ -20,6 +21,8 @@ export class SessionSocketListener {
   constructor(
     private readonly provider: BaileysSessionProvider,
     private readonly events: EventEmitter2,
+    @Inject('SESSION_REPOSITORY')
+    private readonly sessionRepo: SessionRepository,
   ) {}
 
   async listen(sessionId: string, phone?: string): Promise<string | undefined> {
@@ -121,6 +124,12 @@ export class SessionSocketListener {
     const { connection, qr } = update;
 
     if (connection) {
+      if (connection === 'connecting') {
+        await this.sessionRepo.updateStatus(sessionId, 'starting');
+      }
+      if (connection === 'open') {
+        await this.sessionRepo.updateStatus(sessionId, 'ready');
+      }
       await this.provider.update(sessionId, { status: connection });
       this.events.emit('session.status', { sessionId, status: connection });
     }
@@ -157,6 +166,7 @@ export class SessionSocketListener {
 
       if (statusCode === DisconnectReason.loggedOut || statusCode === 401) {
         await this.provider.logout(sessionId);
+        await this.sessionRepo.updateStatus(sessionId, 'removed');
         this.events.emit('session.removed', { sessionId });
         this.boundSessions.delete(sessionId);
         return;
@@ -168,6 +178,7 @@ export class SessionSocketListener {
         if (restarted) {
           this.boundSessions.delete(sessionId);
           this.bindSessionEvents(sessionId, restarted);
+          await this.sessionRepo.updateStatus(sessionId, 'starting');
           this.events.emit('session.status', {
             sessionId,
             status: 'connecting',
@@ -180,6 +191,7 @@ export class SessionSocketListener {
       }
 
       await this.provider.disconnect(sessionId);
+      await this.sessionRepo.updateStatus(sessionId, 'closed');
       this.events.emit('session.closed', { sessionId });
       this.boundSessions.delete(sessionId);
     }

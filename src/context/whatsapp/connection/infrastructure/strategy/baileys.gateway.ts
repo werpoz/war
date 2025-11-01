@@ -28,6 +28,10 @@ export class BaileysGateway implements WhatsappGateway {
     await this.provider.disconnect(sessionId);
   }
 
+  async logoutSession(sessionId: string) {
+    await this.provider.logout(sessionId);
+  }
+
   async sendMessage(sessionId: string, to: string, message: string) {
     const session = await this.provider.get(sessionId);
     if (!session) throw new Error('Session not found');
