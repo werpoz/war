@@ -1,7 +1,10 @@
+import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import makeWASocket, {
   AuthenticationState,
   Browsers,
 } from '@whiskeysockets/baileys';
+import { BaileysLoggerAdapter } from './baileys-logger.adapter';
 
 export type SocketWA = ReturnType<typeof makeWASocket>;
 export type SessionBaileys = {
@@ -11,8 +14,19 @@ export type SessionBaileys = {
   status?: string;
 };
 
+@Injectable()
 export class BaileysSessionProvider {
-  private sessions = new Map<string, SessionBaileys>();
+  private readonly sessions = new Map<string, SessionBaileys>();
+  private readonly logger: BaileysLoggerAdapter;
+
+  constructor(private readonly configService: ConfigService) {
+    const debugEnv = this.configService.get<string>('BAILEYS_DEBUG');
+    const structuredEnv = this.configService.get<string>('LOG_FORMAT');
+    this.logger = new BaileysLoggerAdapter(BaileysSessionProvider.name, {
+      debug: ['true', '1', 'on'].includes((debugEnv ?? '').toLowerCase()),
+      structured: (structuredEnv ?? '').toLowerCase() === 'json',
+    });
+  }
 
   async createWithAuth(
     sessionId: string,
@@ -25,6 +39,7 @@ export class BaileysSessionProvider {
       auth,
       browser: Browsers.macOS('Chrome'),
       qrTimeout: 60_000,
+      logger: this.logger.child({ sessionId }),
     });
 
     const rec: SessionBaileys = {
