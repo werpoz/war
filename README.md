@@ -38,19 +38,27 @@ pnpm exec tsc --noEmit --incremental false
 
 ### HTTP API
 
-Use `api.http` (VSCode REST client) as a quick reference. Core endpoints:
+### Exposed API
 
-- `POST /sessions` – body: `{ "sessionId": "session01", "phone": "519..." }`
-  - Boots a socket, persists auth creds, and resolves with the QR/pairing code.
-- `DELETE /sessions/:id` – closes a session and cleans in-memory state.
+REST endpoints (see `api.http` for samples):
 
-Events emitted through `EventEmitter2`:
+- `POST /sessions`
+
+  ```json
+  { "sessionId": "session01", "phone": "519..." }
+  ```
+
+  Boots a socket, persists auth credentials, and returns a QR/pairing code when available.
+- `DELETE /sessions/:id`
+  Closes the session, detaches listeners, and clears in-memory state.
+
+Real-time events (via `EventEmitter2`; expose through WebSocket/SSE as needed):
 
 - `session.qr` – QR or pairing code updates.
 - `session.status` – connection status (`connecting`, `open`, `close`).
 - `session.message` – inbound messages (raw Baileys payload).
-- `session.closed` – socket disconnected and removed.
-- `session.removed` – device revoked access (HTTP 401 from WhatsApp).
+- `session.closed` – socket disconnected.
+- `session.removed` – device revoked access (HTTP 401); credentials purged.
 
 ### Session Lifecycle
 
@@ -65,30 +73,28 @@ Events emitted through `EventEmitter2`:
    - Handles connection updates:
      - Emits status/QR events
      - Requests pairing code when the user supplies a phone number
-    - On `restartRequired (515)` automatically recreates the socket
-    - On device removal (`401`) calls `logout`, wipes persisted credentials, and emits `session.removed`
+     - On `restartRequired (515)` automatically recreates the socket
+     - On device removal (`401`) logs out, wipes persisted credentials, and emits `session.removed`
 
 ### Logging
 
-- All Baileys logs are routed through Nest `Logger`.
+- All Baileys logs route through Nest's `Logger` via `BaileysLoggerAdapter`.
 - Enable verbose logging with `BAILEYS_DEBUG=true`.
-- Switch to structured JSON logs with `LOG_FORMAT=json`.
-
-Example log entry:
-
-```sh
-[BaileysSessionProvider] LOG: connection open | meta={ sessionId: 'session01' }
-```
+- Switch to structured JSON with `LOG_FORMAT=json`.
+- Example:
+  ```text
+  [BaileysSessionProvider] LOG: connection open | meta={ sessionId: 'session01' }
+  ```
 
 ### Storage
 
-Baileys credentials are persisted under `./storage/sessions/<sessionId>`. Ensure the directory is writable in your environment.
-
-### Troubleshooting
+- Credentials persist under `./storage/sessions/<sessionId>`.
+- On logout/device removal the directory is deleted (via `FileAuthAdapter.clear`).
+- Ensure the directory (and parent) is writable.
 
 - **`restart required (515)`**: The listener auto-restarts the socket. Check logs for `Restart required; recreating socket`.
 - **Device removed / 401**: The session is logged out, credentials are purged from `./storage`, and `session.removed` is emitted; you must initiate a fresh pairing.
-- **Max listeners warning**: The listener guards against duplicate bindings; if you still see warnings, verify that `listen()` is not called repeatedly for the same session without awaiting completion.
+- **Max listeners warning**: `SessionSocketListener` prevents duplicate bindings; ensure you await `listen()` and avoid concurrent calls per session.
 - **Auth folder permissions**: Make sure the process can read/write `./storage`.
 
 ### Testing
